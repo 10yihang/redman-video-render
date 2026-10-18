@@ -1,0 +1,5 @@
+node_modules/
+private-media/
+composition/assets/*.mp4
+*.mp4
+.hyperframes/
