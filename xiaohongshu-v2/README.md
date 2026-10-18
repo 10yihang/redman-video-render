@@ -1,2 +1,2 @@
 Unofficial Xiaohongshu recruitment concept.
-Source commit: 6a3a55c79dd4d18d1a141c1a22f359b31054ba37
+Source commit: cd285b304970e9e2816d1154e606e97aac22bfe3
