@@ -1,0 +1,4 @@
+node_modules/
+composition/assets/original-score.wav
+*.mp4
+.hyperframes/

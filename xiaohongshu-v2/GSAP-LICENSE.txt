@@ -1,0 +1,5 @@
+GSAP 3.14.2 package notice (not a reproduction of the full license)
+Copyright 2025, GreenSock. All rights reserved.
+Subject to the terms at https://gsap.com/standard-license.
+The official npm package declares: Standard 'no charge' license: https://gsap.com/standard-license.
+The unmodified distribution file preserves its original copyright and license header.

@@ -1,0 +1,80 @@
+name: Render recruitment concept v2
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'xiaohongshu-v2/**'
+      - '.github/workflows/recruitment-v2.yml'
+permissions:
+  contents: read
+concurrency:
+  group: recruitment-v2-render
+  cancel-in-progress: true
+jobs:
+  render:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      CI: 'true'
+      HYPERFRAMES_NO_UPDATE_CHECK: '1'
+      HYPERFRAMES_NO_TELEMETRY: '1'
+      HYPERFRAMES_SKIP_SKILLS: '1'
+      HYPERFRAMES_EXTRACT_CACHE_DIR: 'off'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg python3-numpy
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx hyperframes browser ensure
+      - name: Generate original score
+        working-directory: xiaohongshu-v2
+        run: |
+          python3 create-score.py
+      - name: Check composition and transitions
+        working-directory: xiaohongshu-v2
+        run: |
+          npm run lint
+          npm run check
+      - name: Render and validate
+        working-directory: xiaohongshu-v2
+        run: |
+          npm run render
+          ffmpeg -v error -i Xiaohongshu-Recruitment-v2-1080x1920.mp4 -f null -
+          ffprobe -v error -show_streams -show_format -of json Xiaohongshu-Recruitment-v2-1080x1920.mp4 > media.json
+          python3 - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('Xiaohongshu-Recruitment-v2-1080x1920.mp4')
+          assert 0 < p.stat().st_size < 40*1024*1024
+          m=json.load(open('media.json'))
+          v=next(s for s in m['streams'] if s['codec_type']=='video')
+          a=next(s for s in m['streams'] if s['codec_type']=='audio')
+          assert (v['width'],v['height'])==(1080,1920)
+          assert v['r_frame_rate']=='30/1'
+          assert abs(float(m['format']['duration'])-25)<0.15
+          assert a['channels']==2
+          PY
+      - name: Preserve prior films and publish new concept
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          git fetch origin render-output
+          git worktree add /tmp/recruitment-v2-output origin/render-output
+          mkdir -p /tmp/recruitment-v2-output/xiaohongshu-v2
+          cp xiaohongshu-v2/Xiaohongshu-Recruitment-v2-1080x1920.mp4 xiaohongshu-v2/media.json /tmp/recruitment-v2-output/xiaohongshu-v2/
+          cd /tmp/recruitment-v2-output
+          printf 'Unofficial Xiaohongshu recruitment concept.\nSource commit: %s\n' "$SOURCE_SHA" > xiaohongshu-v2/README.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add xiaohongshu-v2/
+          git diff --cached --quiet || git commit -m 'Render unofficial recruitment concept'
+          git push origin HEAD:render-output
