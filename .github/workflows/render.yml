@@ -1,0 +1,78 @@
+name: Render video
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'composition/**'
+      - 'package*.json'
+      - '.github/workflows/render.yml'
+permissions:
+  contents: read
+concurrency:
+  group: redman-render
+  cancel-in-progress: true
+jobs:
+  render:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      CI: 'true'
+      HYPERFRAMES_NO_UPDATE_CHECK: '1'
+      HYPERFRAMES_SKIP_SKILLS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install pinned renderer and system codecs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          npm install --ignore-scripts --no-audit --no-fund
+          npx hyperframes browser ensure
+      - name: Check composition
+        run: |
+          npm run lint
+          npm run check
+      - name: Render and validate
+        run: |
+          npm run render
+          ffmpeg -v error -i RedMan-Core-1080p.mp4 -f null -
+          ffprobe -v error -show_streams -show_format -of json RedMan-Core-1080p.mp4 > media.json
+          python3 - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('RedMan-Core-1080p.mp4')
+          assert 0 < p.stat().st_size < 40*1024*1024, 'Output must be below 40 MB'
+          m=json.load(open('media.json'))
+          v=next(s for s in m['streams'] if s['codec_type']=='video')
+          a=next(s for s in m['streams'] if s['codec_type']=='audio')
+          assert (v['width'],v['height'])==(1920,1080)
+          assert v['r_frame_rate']=='30/1'
+          assert abs(float(m['format']['duration'])-8)<0.15
+          assert a['channels']==2
+          PY
+      - name: Publish only the small rendered file to output branch
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p /tmp/redman-result
+          cp RedMan-Core-1080p.mp4 media.json /tmp/redman-result/
+          git fetch origin render-output || true
+          if git show-ref --verify --quiet refs/remotes/origin/render-output; then
+            git switch --force-create render-output origin/render-output
+          else
+            git switch --orphan render-output
+            git rm -rf --ignore-unmatch .
+          fi
+          cp /tmp/redman-result/* .
+          printf 'Source commit: %s\nPreset concept animation.\n' "$SOURCE_SHA" > README.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add RedMan-Core-1080p.mp4 media.json README.md
+          git diff --cached --quiet || git commit -m 'Render concept video'
+          git push origin HEAD:render-output

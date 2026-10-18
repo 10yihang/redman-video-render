@@ -1,0 +1,15 @@
+{
+  "name": "redman-core-motion-proof",
+  "version": "1.0.0",
+  "private": true,
+  "description": "8-second RedMan concept animation",
+  "dependencies": {
+    "hyperframes": "0.8.171",
+    "gsap": "3.14.2"
+  },
+  "scripts": {
+    "lint": "hyperframes lint composition",
+    "check": "hyperframes check composition --snapshots",
+    "render": "hyperframes render composition --fps 30 --quality delivery --output RedMan-Core-1080p.mp4"
+  }
+}
